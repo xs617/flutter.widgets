@@ -277,8 +277,7 @@ class UnboundedRenderViewport extends RenderViewport {
       if (result != 0.0) return -result;
     }
 
-    // positive scroll offsets
-    return layoutChildSequence(
+    var result = layoutChildSequence(
       child: center,
       scrollOffset: math.max(0.0, -centerOffset),
       overlap:
@@ -294,6 +293,37 @@ class UnboundedRenderViewport extends RenderViewport {
       remainingCacheExtent: forwardDirectionRemainingCacheExtent,
       cacheOrigin: centerOffset.clamp(-_calculatedCacheExtent!, 0.0),
     );
+    if (center?.parent is UnboundedRenderViewport && result == 0) {
+      var viewPort = center!.parent as UnboundedRenderViewport;
+
+      /// 正向下，initIndex 会作为视窗第一个元素展示，
+      /// 当center及其以下的元素小于视窗
+      /// （center及其以下的元素高度 + 已经偏移位置 < 视窗高度） 则视窗需要偏移 （center及其以下的元素高度 + 已经偏移位置 - 视窗高度）
+      var afterCenterItem = center;
+      var centerToEndHeight = 0.0;
+      while (afterCenterItem != null) {
+        centerToEndHeight += (afterCenterItem.geometry?.maxPaintExtent ?? 0);
+        afterCenterItem = viewPort.childAfter(afterCenterItem);
+        if (centerToEndHeight > mainAxisExtent) {
+          break;
+        }
+      }
+      if (centerToEndHeight < mainAxisExtent) {
+        var beforeCenterItem = viewPort.childBefore(center!);
+        var topToCenterHeight = beforeCenterItem?.geometry?.maxPaintExtent ?? 0;
+        var totalHeight = topToCenterHeight + centerToEndHeight;
+        if (totalHeight < mainAxisExtent) {
+          if (correctedOffset == 0) {
+            return -topToCenterHeight;
+          } else {
+            return result;
+          }
+        } else if (centerToEndHeight - correctedOffset < mainAxisExtent) {
+          return centerToEndHeight - correctedOffset - mainAxisExtent;
+        }
+      }
+    }
+    return result;
   }
 
   @override
